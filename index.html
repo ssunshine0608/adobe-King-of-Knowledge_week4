@@ -1,0 +1,723 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport"
+        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Adobe 知識王挑戰賽｜Week 4</title>
+
+  <!-- React / Babel / Tailwind -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- 彩帶套件 -->
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
+
+  <style>
+    html, body, #root {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      overflow: hidden;
+      overscroll-behavior: none;
+      background: #0b1020;
+    }
+
+    /* 超淡轉場霧：避免殘影，又不破壞節奏 */
+    .transition-mask {
+      position: fixed;
+      inset: 0;
+      background: linear-gradient(
+        to bottom,
+        rgba(0,0,0,0.12),
+        rgba(0,0,0,0.18)
+      );
+      opacity: 0;
+      animation: maskFade 200ms ease-out forwards;
+      z-index: 998;
+      pointer-events: none;
+    }
+    @keyframes maskFade {
+      from { opacity: 0; }
+      to   { opacity: 1; }
+    }
+
+    body {
+      font-family: "Noto Sans TC", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      -webkit-user-select: none;
+      user-select: none;
+      -webkit-touch-callout: none;
+    }
+
+    .touch-highlight { transition: background-color 0.1s; }
+    .touch-highlight:active {
+      background-color: rgba(255, 255, 255, 0.22);
+      border-radius: 16px;
+    }
+
+    ::-webkit-scrollbar { display: none; }
+
+    /* =========================
+       題目卡轉場動畫（效能優先版）
+       進場：上→下滑入
+       退場：左滑出去
+       ========================= */
+    .q-card {
+      transform: translateZ(0);
+      will-change: transform, opacity;
+      backface-visibility: hidden;
+    }
+
+    .q-enter { animation: qEnter 520ms cubic-bezier(.22,.92,.18,1) both; }
+    @keyframes qEnter {
+      0%   { opacity: 0; transform: translate3d(0,-22%,0); }
+      100% { opacity: 1; transform: translate3d(0,0,0); }
+    }
+
+    .q-exit { animation: qExit 300ms ease-out both; }
+    @keyframes qExit {
+      0%   { opacity: 1; transform: translate3d(0,0,0); }
+      100% { opacity: 0; transform: translate3d(-30%,0,0); }
+    }
+
+    /* =========================
+       解析浮層
+       ========================= */
+    .overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.75);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 999;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.22s ease;
+    }
+    .overlay.show {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .explanation-card {
+      padding: 20px 22px;
+      border-radius: 18px;
+      max-width: 360px;
+      width: 88%;
+      box-shadow: 0 18px 40px rgba(0, 0, 0, 0.35);
+      transform: translateY(10px);
+      transition: transform 0.22s ease;
+      color: #f9fafb;
+
+      /* ✅ 固定視窗內高度，確保「零滑動」也能看完 */
+      max-height: 78vh;
+      overflow: hidden; /* 不讓它出現捲動條 */
+      display: flex;
+      flex-direction: column;
+    }
+    .overlay.show .explanation-card { transform: translateY(0); }
+
+    .explanation-card.correct {
+      background: radial-gradient(circle at top, #16a34a, #022c22);
+      border: 2px solid #22c55e;
+    }
+    .explanation-card.wrong {
+      background: radial-gradient(circle at top, #cb233c, #3f0f1f);
+      border: 2px solid #fb7185;
+    }
+
+    .explanation-title { font-size: 18px; font-weight: 800; margin-bottom: 4px; }
+    .explanation-subtitle { font-size: 12px; opacity: 0.85; }
+
+    /* ✅ 文字排版：自然斷行 + 不會怪 */
+    .explanation-text {
+      font-size: 14px;
+      line-height: 1.6;
+      margin-top: 10px;
+
+      white-space: normal;
+      word-break: keep-all;
+      overflow-wrap: anywhere;
+      text-wrap: balance;
+
+      /* ✅ 限制行數，避免把版面撐爆造成需要滑動 */
+      display: -webkit-box;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 6; /* 主解析最多 6 行 */
+      overflow: hidden;
+    }
+
+    /* ✅ 延伸學習（可有可無） */
+    .explanation-extend {
+      margin-top: 8px;
+      font-size: 13px;
+      line-height: 1.55;
+      opacity: 0.92;
+
+      word-break: keep-all;
+      overflow-wrap: anywhere;
+      text-wrap: balance;
+
+      display: -webkit-box;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 4; /* 延伸最多 4 行 */
+      overflow: hidden;
+    }
+
+    /* ✅ Banner 區：固定比例，不搶戲 */
+    .explanation-banner-wrap {
+      margin-top: 10px;
+      width: 100%;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      flex: 0 0 auto;
+    }
+    .explanation-banner {
+      width: 100%;
+      border-radius: 14px;
+      overflow: hidden;
+      border: 1px solid rgba(255,255,255,0.18);
+      background: rgba(255,255,255,0.06);
+      aspect-ratio: 3 / 1;
+      max-width: 320px;
+    }
+    .explanation-banner img{
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display:block;
+    }
+
+    .explanation-footer {
+      margin-top: auto; /* ✅ footer 永遠貼底：分數/按鈕位置固定 */
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12px;
+      opacity: 0.9;
+      padding-top: 14px;
+    }
+
+    .explanation-next-btn {
+      padding: 8px 14px;
+      border-radius: 999px;
+      border: none;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 700;
+      background: linear-gradient(135deg, #f97316, #ec4899);
+      color: #fff;
+      transition: transform 0.1s ease, box-shadow 0.1s ease;
+      box-shadow: 0 10px 18px rgba(0, 0, 0, 0.25);
+    }
+    .explanation-next-btn:active { transform: scale(0.96); box-shadow: none; }
+
+    /* =========================
+       結果頁按鈕（白字 + 一點點文字陰影）
+       ========================= */
+    .btn-orange {
+      background: linear-gradient(90deg, #f59e0b 0%, #f97316 100%);
+      color: #ffffff;
+      text-shadow: 0 1px 2px rgba(0,0,0,.35);
+    }
+  </style>
+</head>
+
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    // ===============================
+    // 全域設定
+    // ===============================
+    const DEV_MODE = false;
+
+    // ✅ 換成你的 OA ID（要含 @）
+    const LINE_BOT_ID = "@your_bot_id";
+
+    // ✅ Week4 圖片 repo（jsDelivr）
+    const CDN_BASE = "https://cdn.jsdelivr.net/gh/ssunshine0608/adobe-King-of-Knowledge_week4@main/";
+    const COVER_IMAGE = "fengmian.jpg";
+
+    // ✅ Week4 題庫
+    // correct: 0=A, 1=B, 2=C, 3=D
+    const QUESTIONS = [
+      {
+        id: 1,
+        image: "q1.jpg",
+        correct: 1, // B
+        explanation:
+          "Adobe 將 AI 深度整合進既有剪輯流程（如 Premiere Pro），定位為加速與輔助工具，讓創作者更專注在敘事與節奏。",
+        extend:
+          "想快速掌握 AI 影片與 Firefly 的最新整理？可至官方帳號【會員專區】查看型錄與資源。"
+      },
+      {
+        id: 2,
+        image: "q2.jpg",
+        correct: 0, // A
+        explanation:
+          "Firefly 是創作者的「副駕駛」，主打商用安全與可控生成；它不取代設計師，而是幫你處理瑣事、釋放創意決策。",
+        extend: ""
+      },
+      {
+        id: 3,
+        image: "q3.jpg",
+        correct: 3, // D
+        explanation:
+          "AI 助理把複雜操作口語化，降低學習門檻，也能自動化跨軟體流程，加速整體創作效率。",
+        extend: ""
+      },
+      {
+        id: 4,
+        image: "q4.jpg",
+        correct: 1, // B
+        explanation:
+          "留白是設計的「呼吸」。透過視覺停頓引導焦點、建立層次，能讓資訊更清楚、版面更有質感。",
+        extend:
+          "📌 延伸學習：色彩與版面節奏密不可分，相關趨勢與應用可在官方帳號【課程活動一覽】查看近期線上分享。",
+        banner: "pantone.jpg"
+      },
+      {
+        id: 5,
+        image: "q5.jpg",
+        correct: 0, // A
+        explanation:
+          "動態設計最耗時的常是反覆微調與版本修改；AI 可自動化重複工序，讓設計師專注更高價值的視覺構思。",
+        extend:
+          "📌 延伸學習：想了解創作者如何提升效率與工作流，可在官方帳號【課程活動一覽】查看相關線上分享。",
+        banner: "behance.jpg"
+      }
+    ];
+
+    // 你校準好的點擊區
+    const INIT_TOP = 38;
+    const INIT_HEIGHT = 42;
+    const INIT_LEFT = 8;
+    const INIT_WIDTH = 85;
+
+    function getImagePath(fileName) {
+      return CDN_BASE + fileName;
+    }
+
+    function App() {
+      const [gameState, setGameState] = React.useState("start"); // start | playing | result
+      const [currentQIndex, setCurrentQIndex] = React.useState(0);
+      const [score, setScore] = React.useState(0);
+      const [userId, setUserId] = React.useState("");
+
+      const [showExplanation, setShowExplanation] = React.useState(false);
+      const [lastIsCorrect, setLastIsCorrect] = React.useState(false);
+      const [isLock, setIsLock] = React.useState(false);
+
+      // ✅ 過場遮罩（消除上一題殘影）
+      const [isTransitioning, setIsTransitioning] = React.useState(false);
+
+      // 轉場動畫狀態
+      const [qAnim, setQAnim] = React.useState("enter"); // enter | idle | exit
+
+      // 點擊區百分比（DEV 可調）
+      const [topPercent, setTopPercent] = React.useState(INIT_TOP);
+      const [heightPercent, setHeightPercent] = React.useState(INIT_HEIGHT);
+      const [leftPercent, setLeftPercent] = React.useState(INIT_LEFT);
+      const [widthPercent, setWidthPercent] = React.useState(INIT_WIDTH);
+
+      // 支援 uid（未來串 LINE 參數用）
+      React.useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        const uid = params.get("uid");
+        if (uid) setUserId(uid);
+      }, []);
+
+      // ✅ 預載當前與下一題（減少換題瞬間解碼卡頓）
+      React.useEffect(() => {
+        const preload = (src) => {
+          const img = new Image();
+          img.decoding = "async";
+          img.src = src;
+        };
+
+        const cur = QUESTIONS[currentQIndex]?.image;
+        const next = QUESTIONS[currentQIndex + 1]?.image;
+        if (cur) preload(getImagePath(cur));
+        if (next) preload(getImagePath(next));
+
+        // 預載 banner（只預載當題，避免浪費）
+        const banner = QUESTIONS[currentQIndex]?.banner;
+        if (banner) preload(getImagePath(banner));
+      }, [currentQIndex]);
+
+      // 🎉 100 分時噴彩帶
+      React.useEffect(() => {
+        if (gameState !== "result" || score !== 100) return;
+        if (!window.confetti) return;
+
+        window.confetti({ particleCount: 50, angle: 60,  spread: 55, origin: { x: 0, y: 1 }, ticks: 120 });
+        window.confetti({ particleCount: 50, angle: 120, spread: 55, origin: { x: 1, y: 1 }, ticks: 120 });
+      }, [gameState, score]);
+
+      const startGame = () => {
+        setGameState("playing");
+        setScore(0);
+        setCurrentQIndex(0);
+        setShowExplanation(false);
+        setIsLock(false);
+        setIsTransitioning(false);
+        setQAnim("enter");
+        setTimeout(() => setQAnim("idle"), 540);
+      };
+
+      const handleAnswer = (optionIndex) => {
+        if (isLock || showExplanation || isTransitioning) return;
+
+        const currentQ = QUESTIONS[currentQIndex];
+        const correct = optionIndex === currentQ.correct;
+
+        setLastIsCorrect(correct);
+        setIsLock(true);
+        if (correct) setScore((prev) => prev + 20);
+
+        setTimeout(() => setShowExplanation(true), 160);
+      };
+
+      const goNextQuestion = () => {
+        const isLast = currentQIndex >= QUESTIONS.length - 1;
+
+        setShowExplanation(false);
+        setIsTransitioning(true);
+
+        if (isLast) {
+          setTimeout(() => {
+            setIsTransitioning(false);
+            setGameState("result");
+          }, 240);
+          return;
+        }
+
+        const EXIT_MS = 300;
+        const ENTER_MS = 520;
+        const MASK_DELAY = 200;
+
+        setTimeout(() => { setQAnim("exit"); }, MASK_DELAY);
+
+        setTimeout(() => {
+          setCurrentQIndex((prev) => prev + 1);
+          setIsLock(false);
+          setQAnim("enter");
+          setIsTransitioning(false);
+          setTimeout(() => setQAnim("idle"), ENTER_MS + 20);
+        }, MASK_DELAY + EXIT_MS);
+      };
+
+      const shareToLineOA = (text) => {
+        window.location.href =
+          `https://line.me/R/oaMessage/${LINE_BOT_ID}/?text=${encodeURIComponent(text)}`;
+      };
+
+      const shareFriend = () => {
+        const msg =
+          `【Adobe 知識王挑戰 Week 4】\n` +
+          `我拿到 ${score} 分！\n` +
+          `你也來挑戰看看～`;
+        shareToLineOA(msg);
+      };
+
+      const shareAndClaimReward = () => {
+        const msg =
+          `【滿分領獎】\n` +
+          `Week 4 我拿到 100 分！\n` +
+          `uid：${userId || "Guest"}`;
+        shareToLineOA(msg);
+      };
+
+      // ========= Start（封面） =========
+      if (gameState === "start") {
+        return (
+          <div className="w-full h-full bg-gray-900 flex items-center justify-center">
+            <div className="w-full max-w-md px-4">
+              <div className="relative w-full aspect-[9/16] mx-auto shadow-2xl">
+                <img
+                  src={getImagePath(COVER_IMAGE)}
+                  decoding="async"
+                  draggable="false"
+                  className="w-full h-full object-contain rounded-xl"
+                  onError={(e) => {
+                    e.target.src = "https://placehold.co/600x1067/333/FFF?text=找不到封面圖";
+                  }}
+                />
+
+                {/* Start 熱區 */}
+                <div
+                  onClick={startGame}
+                  className={
+                    "absolute touch-highlight cursor-pointer" +
+                    (DEV_MODE ? " border border-emerald-300/80" : "")
+                  }
+                  style={{ top: "80%", height: "8%", left: "32%", width: "36%" }}
+                ></div>
+
+                {DEV_MODE && (
+                  <div className="absolute top-2 left-2 bg-black/70 text-[10px] text-white px-2 py-1 rounded-full">
+                    DEV MODE
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      // ========= 作答畫面 =========
+      if (gameState === "playing") {
+        const currentQ = QUESTIONS[currentQIndex];
+        const animClass = qAnim === "enter" ? "q-enter" : (qAnim === "exit" ? "q-exit" : "");
+
+        return (
+          <div className="w-full h-full bg-gray-800 flex items-center justify-center overflow-hidden relative">
+            <div className="w-full max-w-md px-4">
+              <div className={"relative w-full aspect-[9/16] mx-auto q-card " + animClass}>
+                <img
+                  src={getImagePath(currentQ.image)}
+                  decoding="async"
+                  draggable="false"
+                  className="w-full h-full object-contain rounded-xl shadow-lg"
+                  onError={(e) => {
+                    e.target.src = "https://placehold.co/600x1067/333/FFF?text=找不到題目圖";
+                  }}
+                />
+
+                {/* 分數徽章 */}
+                <div className="absolute top-3 right-3 bg-black/70 text-white text-xs px-3 py-1 rounded-full">
+                  分數：{score}
+                </div>
+
+                {/* 點擊區域：四個答案格 */}
+                <div
+                  className={
+                    "absolute grid grid-cols-2 grid-rows-2" +
+                    (DEV_MODE ? " bg-yellow-300/10" : "")
+                  }
+                  style={{
+                    top: `${topPercent}%`,
+                    height: `${heightPercent}%`,
+                    left: `${leftPercent}%`,
+                    width: `${widthPercent}%`
+                  }}
+                >
+                  <div onClick={() => handleAnswer(0)} className={"touch-highlight" + (DEV_MODE ? " border border-red-300/80" : "")}></div>
+                  <div onClick={() => handleAnswer(1)} className={"touch-highlight" + (DEV_MODE ? " border border-green-300/80" : "")}></div>
+                  <div onClick={() => handleAnswer(2)} className={"touch-highlight" + (DEV_MODE ? " border border-blue-300/80" : "")}></div>
+                  <div onClick={() => handleAnswer(3)} className={"touch-highlight" + (DEV_MODE ? " border border-purple-300/80" : "")}></div>
+                </div>
+              </div>
+            </div>
+
+            {isTransitioning && <div className="transition-mask"></div>}
+
+            {/* DEV 滑桿 */}
+            {DEV_MODE && (
+              <div className="fixed bottom-2 left-1/2 -translate-x-1/2 w-full max-w-md px-3 z-[900]">
+                <div className="bg-black/80 text-white text-[10px] rounded-xl px-3 py-2 space-y-1">
+                  <div className="text-[11px] mb-1 opacity-80">點擊區調整（Top / Height / Left / Width）</div>
+
+                  <div className="flex items-center gap-2">
+                    <span className="w-10">上</span>
+                    <input type="range" min="0" max="100" value={topPercent}
+                      onChange={(e) => setTopPercent(Number(e.target.value))} className="w-full" />
+                    <span className="w-10 text-right">{topPercent}%</span>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <span className="w-10">高</span>
+                    <input type="range" min="10" max="100" value={heightPercent}
+                      onChange={(e) => setHeightPercent(Number(e.target.value))} className="w-full" />
+                    <span className="w-10 text-right">{heightPercent}%</span>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <span className="w-10">左</span>
+                    <input type="range" min="0" max="20" value={leftPercent}
+                      onChange={(e) => setLeftPercent(Number(e.target.value))} className="w-full" />
+                    <span className="w-10 text-right">{leftPercent}%</span>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <span className="w-10">寬</span>
+                    <input type="range" min="50" max="100" value={widthPercent}
+                      onChange={(e) => setWidthPercent(Number(e.target.value))} className="w-full" />
+                    <span className="w-10 text-right">{widthPercent}%</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* 解析浮層 */}
+            <div className={`overlay ${showExplanation ? "show" : ""}`}>
+              <div className={"explanation-card " + (lastIsCorrect ? "correct" : "wrong")}>
+                <div className="flex items-center">
+                  <div
+                    className={
+                      "w-10 h-10 rounded-full flex items-center justify-center text-xl font-bold " +
+                      (lastIsCorrect
+                        ? "bg-emerald-500/20 border border-emerald-300 text-emerald-300"
+                        : "bg-rose-500/20 border border-rose-300 text-rose-300")
+                    }
+                  >
+                    {lastIsCorrect ? "✓" : "✕"}
+                  </div>
+                  <div className="ml-3">
+                    <div className="explanation-title">
+                      {lastIsCorrect ? "答對了！🎉" : "答錯了"}
+                    </div>
+                    <div className="explanation-subtitle">
+                      第 {currentQIndex + 1} 題 / 共 {QUESTIONS.length} 題
+                    </div>
+                  </div>
+                </div>
+
+                {/* 主解析（行數限制 + 自然斷行） */}
+                <div className="explanation-text">
+                  {QUESTIONS[currentQIndex].explanation}
+                </div>
+
+                {/* 延伸學習（可無） */}
+                {QUESTIONS[currentQIndex].extend ? (
+                  <div className="explanation-extend">
+                    {QUESTIONS[currentQIndex].extend}
+                  </div>
+                ) : null}
+
+                {/* Q4/Q5 banner（可無） */}
+                {QUESTIONS[currentQIndex].banner ? (
+                  <div className="explanation-banner-wrap">
+                    <div className="explanation-banner">
+                      <img
+                        src={getImagePath(QUESTIONS[currentQIndex].banner)}
+                        alt="banner"
+                        decoding="async"
+                        draggable="false"
+                      />
+                    </div>
+                  </div>
+                ) : null}
+
+                <div className="explanation-footer">
+                  <span>目前分數：{score} 分</span>
+                  <button type="button" className="explanation-next-btn" onClick={goNextQuestion}>
+                    {currentQIndex === QUESTIONS.length - 1 ? "看結果 ▶" : "下一題 ▶"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      // ========= 結果畫面（滿分才可領獎） =========
+      if (gameState === "result") {
+        const isFullScore = score === 100;
+
+        // 未滿分：再玩一次 + 分享好友
+        if (!isFullScore) {
+          return (
+            <div className="w-full h-full flex items-center justify-center relative overflow-hidden bg-[#050816]">
+              <div className="absolute -top-40 left-1/2 -translate-x-1/2 w-[520px] h-[520px] bg-white/5 blur-3xl rounded-full"></div>
+
+              <div className="relative z-10 w-full max-w-md px-6 text-center text-white">
+                <div className="text-sm text-white/80 mb-2">本週挑戰完成！</div>
+
+                <div className="text-[84px] leading-none font-black tracking-tight mb-4">
+                  {score} <span className="text-[64px] font-black">分</span>
+                </div>
+
+                <div className="text-[20px] font-extrabold text-white/90 mb-3">
+                  還差一點點！
+                </div>
+
+                <div className="text-sm text-white/60 leading-relaxed mb-10">
+                  必須達到 100 分才能解鎖獎勵喔。<br/>
+                  別氣餒，再試一次！
+                </div>
+
+                <div className="flex flex-col gap-4">
+                  <button
+                    onClick={() => window.location.reload()}
+                    className="w-full rounded-2xl py-4 text-[22px] font-black bg-white/15 text-white shadow-lg active:scale-[0.99]"
+                  >
+                    ↩︎ 再玩一次
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      const msg =
+                        `【Adobe 知識王挑戰 Week 4】\n` +
+                        `我拿到 ${score} 分！\n` +
+                        `你也來挑戰看看～`;
+                      window.location.href =
+                        `https://line.me/R/oaMessage/${LINE_BOT_ID}/?text=${encodeURIComponent(msg)}`;
+                    }}
+                    className="w-full rounded-2xl py-4 text-[22px] font-black bg-emerald-600 text-white shadow-lg active:scale-[0.99]"
+                  >
+                    🧁 分享好友
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        }
+
+        // 滿分：分享並領取獎勵 + 再玩一次
+        return (
+          <div className="w-full h-full flex items-center justify-center relative overflow-hidden bg-[#050816]">
+            <div className="absolute -top-40 left-1/2 -translate-x-1/2 w-[520px] h-[520px] bg-white/5 blur-3xl rounded-full"></div>
+
+            <div className="relative z-10 w-full max-w-md px-6 text-center text-white">
+              <div className="text-sm text-white/80 mb-2">本週挑戰完成！</div>
+
+              <div className="text-[84px] leading-none font-black tracking-tight mb-3">
+                {score} <span className="text-[64px] font-black">分</span>
+              </div>
+
+              <div className="text-[18px] font-extrabold text-amber-300 mb-3">
+                🏆 恭喜獲得滿分！
+              </div>
+
+              <div className="text-sm text-white/70 leading-relaxed mb-8">
+                請分享給好友，完成分享後<br/>即可自動領取獎勵！
+              </div>
+
+              <button
+                onClick={() => {
+                  const msg =
+                    `【滿分領獎】\n` +
+                    `Week 4 我拿到 100 分！\n` +
+                    `uid：${userId || "Guest"}`;
+                  window.location.href =
+                    `https://line.me/R/oaMessage/${LINE_BOT_ID}/?text=${encodeURIComponent(msg)}`;
+                }}
+                className="btn-orange w-full rounded-2xl py-4 text-[22px] font-black shadow-lg active:scale-[0.99]"
+              >
+                🎁 分享並領取獎勵
+              </button>
+
+              <button
+                onClick={() => window.location.reload()}
+                className="mt-5 text-white/55 text-sm underline underline-offset-8"
+              >
+                再玩一次
+              </button>
+            </div>
+          </div>
+        );
+      }
+
+      return null;
+    }
+
+    ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+  </script>
+</body>
+</html>
