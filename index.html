@@ -112,9 +112,9 @@
       transition: transform 0.22s ease;
       color: #f9fafb;
 
-      /* ✅ 固定視窗內高度，確保「零滑動」也能看完 */
+      /* ✅ 固定視窗內高度，確保零滑動也能看完 */
       max-height: 78vh;
-      overflow: hidden; /* 不讓它出現捲動條 */
+      overflow: hidden;
       display: flex;
       flex-direction: column;
     }
@@ -132,27 +132,32 @@
     .explanation-title { font-size: 18px; font-weight: 800; margin-bottom: 4px; }
     .explanation-subtitle { font-size: 12px; opacity: 0.85; }
 
-    /* ✅ 文字排版：自然斷行 + 不會怪 */
+    /* ✅ 主解析：像第一段 */
     .explanation-text {
       font-size: 14px;
       line-height: 1.6;
+
       margin-top: 10px;
+      margin-bottom: 0;
+      padding-bottom: 2px;
 
       white-space: normal;
       word-break: keep-all;
       overflow-wrap: anywhere;
       text-wrap: balance;
 
-      /* ✅ 限制行數，避免把版面撐爆造成需要滑動 */
       display: -webkit-box;
       -webkit-box-orient: vertical;
-      -webkit-line-clamp: 6; /* 主解析最多 6 行 */
+      -webkit-line-clamp: 6;
       overflow: hidden;
     }
 
-    /* ✅ 延伸學習（可有可無） */
+    /* ✅ 📌延伸：像第二段（距離拉開＋淡分隔線） */
     .explanation-extend {
-      margin-top: 8px;
+      margin-top: 14px;
+      padding-top: 12px;
+      border-top: 1px solid rgba(255,255,255,0.12);
+
       font-size: 13px;
       line-height: 1.55;
       opacity: 0.92;
@@ -163,13 +168,13 @@
 
       display: -webkit-box;
       -webkit-box-orient: vertical;
-      -webkit-line-clamp: 4; /* 延伸最多 4 行 */
+      -webkit-line-clamp: 4;
       overflow: hidden;
     }
 
-    /* ✅ Banner 區：固定比例，不搶戲 */
+    /* ✅ Banner：質感置中小卡（Q4/Q5） */
     .explanation-banner-wrap {
-      margin-top: 10px;
+      margin-top: 12px;
       width: 100%;
       display: flex;
       justify-content: center;
@@ -178,22 +183,37 @@
     }
     .explanation-banner {
       width: 100%;
-      border-radius: 14px;
-      overflow: hidden;
-      border: 1px solid rgba(255,255,255,0.18);
-      background: rgba(255,255,255,0.06);
+      max-width: 328px;               /* ✅ 更像置中小卡 */
       aspect-ratio: 3 / 1;
-      max-width: 320px;
+
+      border-radius: 16px;
+      overflow: hidden;
+
+      /* ✅ 外框 + 內框 + 陰影：質感 */
+      border: 1px solid rgba(255,255,255,0.22);
+      outline: 1px solid rgba(0,0,0,0.16);
+      outline-offset: -2px;
+
+      box-shadow:
+        0 14px 28px rgba(0,0,0,0.25),
+        inset 0 0 0 1px rgba(255,255,255,0.10);
+
+      background: rgba(255,255,255,0.06);
+
+      transform: translateZ(0);
     }
     .explanation-banner img{
       width: 100%;
       height: 100%;
       object-fit: cover;
       display:block;
+
+      /* ✅ 圖更乾淨：微微提升對比 */
+      filter: saturate(1.02) contrast(1.02);
     }
 
     .explanation-footer {
-      margin-top: auto; /* ✅ footer 永遠貼底：分數/按鈕位置固定 */
+      margin-top: auto; /* footer 永遠貼底：分數/按鈕位置固定 */
       display: flex;
       justify-content: space-between;
       align-items: center;
@@ -239,7 +259,7 @@
     // ✅ 換成你的 OA ID（要含 @）
     const LINE_BOT_ID = "@your_bot_id";
 
-    // ✅ Week4 圖片 repo（jsDelivr）
+    // ✅ Week4 repo（jsDelivr）
     const CDN_BASE = "https://cdn.jsdelivr.net/gh/ssunshine0608/adobe-King-of-Knowledge_week4@main/";
     const COVER_IMAGE = "fengmian.jpg";
 
@@ -253,7 +273,7 @@
         explanation:
           "Adobe 將 AI 深度整合進既有剪輯流程（如 Premiere Pro），定位為加速與輔助工具，讓創作者更專注在敘事與節奏。",
         extend:
-          "想快速掌握 AI 影片與 Firefly 的最新整理？可至官方帳號【會員專區】查看型錄與資源。"
+          "📌 想快速掌握 AI 影片與 Firefly 的最新整理？可至官方帳號【會員專區】查看型錄與資源。"
       },
       {
         id: 2,
@@ -345,7 +365,6 @@
         if (cur) preload(getImagePath(cur));
         if (next) preload(getImagePath(next));
 
-        // 預載 banner（只預載當題，避免浪費）
         const banner = QUESTIONS[currentQIndex]?.banner;
         if (banner) preload(getImagePath(banner));
       }, [currentQIndex]);
@@ -517,43 +536,6 @@
 
             {isTransitioning && <div className="transition-mask"></div>}
 
-            {/* DEV 滑桿 */}
-            {DEV_MODE && (
-              <div className="fixed bottom-2 left-1/2 -translate-x-1/2 w-full max-w-md px-3 z-[900]">
-                <div className="bg-black/80 text-white text-[10px] rounded-xl px-3 py-2 space-y-1">
-                  <div className="text-[11px] mb-1 opacity-80">點擊區調整（Top / Height / Left / Width）</div>
-
-                  <div className="flex items-center gap-2">
-                    <span className="w-10">上</span>
-                    <input type="range" min="0" max="100" value={topPercent}
-                      onChange={(e) => setTopPercent(Number(e.target.value))} className="w-full" />
-                    <span className="w-10 text-right">{topPercent}%</span>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <span className="w-10">高</span>
-                    <input type="range" min="10" max="100" value={heightPercent}
-                      onChange={(e) => setHeightPercent(Number(e.target.value))} className="w-full" />
-                    <span className="w-10 text-right">{heightPercent}%</span>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <span className="w-10">左</span>
-                    <input type="range" min="0" max="20" value={leftPercent}
-                      onChange={(e) => setLeftPercent(Number(e.target.value))} className="w-full" />
-                    <span className="w-10 text-right">{leftPercent}%</span>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <span className="w-10">寬</span>
-                    <input type="range" min="50" max="100" value={widthPercent}
-                      onChange={(e) => setWidthPercent(Number(e.target.value))} className="w-full" />
-                    <span className="w-10 text-right">{widthPercent}%</span>
-                  </div>
-                </div>
-              </div>
-            )}
-
             {/* 解析浮層 */}
             <div className={`overlay ${showExplanation ? "show" : ""}`}>
               <div className={"explanation-card " + (lastIsCorrect ? "correct" : "wrong")}>
@@ -578,19 +560,16 @@
                   </div>
                 </div>
 
-                {/* 主解析（行數限制 + 自然斷行） */}
                 <div className="explanation-text">
                   {QUESTIONS[currentQIndex].explanation}
                 </div>
 
-                {/* 延伸學習（可無） */}
                 {QUESTIONS[currentQIndex].extend ? (
                   <div className="explanation-extend">
                     {QUESTIONS[currentQIndex].extend}
                   </div>
                 ) : null}
 
-                {/* Q4/Q5 banner（可無） */}
                 {QUESTIONS[currentQIndex].banner ? (
                   <div className="explanation-banner-wrap">
                     <div className="explanation-banner">
@@ -651,14 +630,7 @@
                   </button>
 
                   <button
-                    onClick={() => {
-                      const msg =
-                        `【Adobe 知識王挑戰 Week 4】\n` +
-                        `我拿到 ${score} 分！\n` +
-                        `你也來挑戰看看～`;
-                      window.location.href =
-                        `https://line.me/R/oaMessage/${LINE_BOT_ID}/?text=${encodeURIComponent(msg)}`;
-                    }}
+                    onClick={shareFriend}
                     className="w-full rounded-2xl py-4 text-[22px] font-black bg-emerald-600 text-white shadow-lg active:scale-[0.99]"
                   >
                     🧁 分享好友
@@ -690,14 +662,7 @@
               </div>
 
               <button
-                onClick={() => {
-                  const msg =
-                    `【滿分領獎】\n` +
-                    `Week 4 我拿到 100 分！\n` +
-                    `uid：${userId || "Guest"}`;
-                  window.location.href =
-                    `https://line.me/R/oaMessage/${LINE_BOT_ID}/?text=${encodeURIComponent(msg)}`;
-                }}
+                onClick={shareAndClaimReward}
                 className="btn-orange w-full rounded-2xl py-4 text-[22px] font-black shadow-lg active:scale-[0.99]"
               >
                 🎁 分享並領取獎勵
